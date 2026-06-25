@@ -8,7 +8,6 @@ function App() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
 
-  // Alina's API Endpoint
   const API_ENDPOINT = 'https://icaa8eqoge.execute-api.us-east-2.amazonaws.com/predict';
 
   const handleFileChange = (event) => {
@@ -43,10 +42,6 @@ function App() {
       const formData = new FormData();
       formData.append('image', selectedFile);
 
-      console.log('Sending request to:', API_ENDPOINT);
-      console.log('File name:', selectedFile.name);
-      console.log('File type:', selectedFile.type);
-
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
         body: formData,
@@ -55,36 +50,29 @@ function App() {
         }
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
 
       const responseData = await response.json();
-      console.log('Response data:', responseData);
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} - ${JSON.stringify(responseData)}`);
-      }
+      // Parse Lambda response
+      const data = responseData.body
+        ? (typeof responseData.body === 'string'
+            ? JSON.parse(responseData.body)
+            : responseData.body)
+        : responseData;
 
-      // Alina's Lambda wraps the data in a "body" field, so parse it
-      let data;
-      if (responseData.body) {
-        data = typeof responseData.body === 'string' 
-          ? JSON.parse(responseData.body) 
-          : responseData.body;
-      } else {
-        data = responseData;
-      }
+      const result = data.result;
 
       setResults({
-        possible_concern: data.possible_concern,
-        finding_type: data.finding_type,
-        confidence: data.confidence,
-        message: data.message
+        label: result.label,
+        confidence: result.confidence
       });
 
     } catch (err) {
       setError(`Upload failed: ${err.message}`);
-      console.error('Full error:', err);
+      console.error('Error:', err);
     } finally {
       setLoading(false);
     }
@@ -167,20 +155,13 @@ function App() {
         ) : (
           // Results Section
           <div className="space-y-6">
-            <div className={`results-box ${results.possible_concern ? 'fracture-detected' : 'no-fracture'}`}>
+            <div className={`results-box ${results.label.includes('Concern') ? 'fracture-detected' : 'no-fracture'}`}>
               <h2>Analysis Results</h2>
 
               <div className="result-item">
                 <p className="result-label">Classification</p>
-                <p className={`result-value ${results.possible_concern ? 'fracture-text' : 'safe-text'}`}>
-                  {results.possible_concern ? '🔴 Possible Concern Detected' : '🟢 No Concern Detected'}
-                </p>
-              </div>
-
-              <div className="result-item">
-                <p className="result-label">Finding Type</p>
-                <p className="result-value" style={{ color: '#cbd5e1' }}>
-                  {results.finding_type}
+                <p className={`result-value ${results.label.includes('Concern') ? 'fracture-text' : 'safe-text'}`}>
+                  {results.label.includes('Concern') ? '🔴 ' : '🟢 '}{results.label}
                 </p>
               </div>
 
@@ -191,12 +172,12 @@ function App() {
                     <div className="confidence-bar">
                       <div 
                         className="confidence-fill"
-                        style={{ width: `${results.confidence * 100}%` }}
+                        style={{ width: `${results.confidence}%` }}
                       />
                     </div>
                   </div>
                   <p className="confidence-value">
-                    {(results.confidence * 100).toFixed(1)}%
+                    {results.confidence.toFixed(1)}%
                   </p>
                 </div>
                 <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginTop: '0.75rem', lineHeight: '1.5' }}>
@@ -209,11 +190,6 @@ function App() {
                   <br/><br/>
                   <strong>Important:</strong> Even with high confidence, this is a screening tool only. Always consult a licensed medical professional for diagnosis.
                 </p>
-              </div>
-
-              <div className="result-item message-box">
-                <p className="result-label">Message</p>
-                <p className="result-message">💡 {results.message}</p>
               </div>
 
               {preview && (
