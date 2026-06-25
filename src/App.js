@@ -34,42 +34,50 @@ function App() {
       setError('Please select an image first');
       return;
     }
-
     setLoading(true);
     setError(null);
-
     try {
-      const formData = new FormData();
-      formData.append('image', selectedFile);
-
+      // 1. Helper function to read file as Base64 text
+      const convertToBase64 = (file) => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => {
+            // Split removes the data URL prefix (e.g., "data:image/png;base64,")
+            const base64String = reader.result.split(',')[1];
+            resolve(base64String);
+          };
+          reader.onerror = (error) => reject(error);
+        });
+      };
+      const base64Image = await convertToBase64(selectedFile);
+      // 2. Send as standard Application/JSON payload
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
-        body: formData,
         headers: {
+          'Content-Type': 'application/json',
           'Accept': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+          image: base64Image,
+          fileName: selectedFile.name
+        })
       });
-
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
-
       const responseData = await response.json();
-
-      // Parse Lambda response
+      // 3. Safely parse Lambda's proxy response integration structure
       const data = responseData.body
         ? (typeof responseData.body === 'string'
             ? JSON.parse(responseData.body)
             : responseData.body)
         : responseData;
-
       const result = data.result;
-
       setResults({
         label: result.label,
         confidence: result.confidence
       });
-
     } catch (err) {
       setError(`Upload failed: ${err.message}`);
       console.error('Error:', err);
@@ -188,30 +196,4 @@ function App() {
                   <br/>• 75-89%: Moderately confident
                   <br/>• 50-74%: Less certain (borderline case)
                   <br/><br/>
-                  <strong>Important:</strong> Even with high confidence, this is a screening tool only. Always consult a licensed medical professional for diagnosis.
-                </p>
-              </div>
-
-              {preview && (
-                <div className="analyzed-image-container">
-                  <p className="result-label">Analyzed Image</p>
-                  <img src={preview} alt="Analyzed" className="analyzed-image" />
-                </div>
-              )}
-
-              <button onClick={handleReset} className="reset-button">
-                ↻ Analyze Another
-              </button>
-            </div>
-          </div>
-        )}
-      </main>
-
-      <footer className="app-footer">
-        <p>Bone Fracture Detector • Powered by AI</p>
-      </footer>
-    </div>
-  );
-}
-
-export default App;
+                  <strong>Important:</strong> Even with high confidence, this is a screening tool only. Always consult a licensed medical professional for
